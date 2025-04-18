@@ -1,0 +1,307 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Roboto', sans-serif;
+}
+
+body {
+    background-color: #f0f0f0; /* Arka planı biraz gri yapalım */
+    color: #333;
+    height: 100vh;
+    overflow: hidden; /* Sayfanın kendisinin kaymasını engelle */
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Tüm yüksekliği kapla */
+}
+
+/* Üst Menü */
+.header {
+    background-color: #ff4500; /* Tasarımdaki turuncu */
+    color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Hafif gölge */
+    position: relative; /* z-index için */
+    z-index: 10;
+}
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 25px; /* Biraz daha fazla padding */
+}
+
+.logo {
+    font-size: 36px; /* Biraz küçülttük */
+    font-weight: bold;
+    color: white;
+    text-decoration: none;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Biraz daha aralık */
+}
+
+#clock,
+.language {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.language {
+    cursor: pointer; /* Dil seçeneği tıklanabilir gibi dursun */
+}
+
+.category-menu {
+    display: flex;
+    background-color: #e03e00; /* Başlık altı turuncu tonu */
+    padding: 8px 20px; /* Padding ayarı */
+    overflow-x: auto; /* Yatayda kaydırma */
+    white-space: nowrap; /* Düğmeler yan yana kalsın */
+    border-top: 1px solid #ff6a36; /* Üst çizgi */
+    border-bottom: 1px solid #d13700; /* Alt çizgi */
+}
+
+/* Kategori Düğmeleri */
+.category-btn {
+    background-color: #333; /* Aktif olmayan (koyu gri) */
+    border: none;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 8px 18px; /* Biraz daha geniş */
+    margin-right: 10px; /* Düğmeler arası boşluk */
+    cursor: pointer;
+    border-radius: 15px; /* Yuvarlak kenarlar */
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    outline: none; /* Tıklama odağını kaldır */
+}
+
+.category-btn:last-child {
+    margin-right: 0;
+}
+
+.category-btn:hover:not(.active) {
+    background-color: #555; /* Üzerine gelince biraz daha açık */
+}
+
+.category-btn:active:not(.active) {
+    transform: scale(0.98); /* Tıklama efekti */
+}
+
+.category-btn.active {
+    /* Aktif renkler JS ile atanacak, varsayılan bir renk belirleyebiliriz */
+    background-color: #fff; /* Aktifken beyaz arka plan */
+    color: #ff4500; /* Turuncu yazı */
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Ana İçerik */
+.main-content {
+    display: flex;
+    flex: 1; /* Kalan tüm alanı kapla */
+    overflow: hidden; /* İçerik taşmasını engelle, kaydırma iç bölümlerde olacak */
+    background-color: #fff; /* Ana içerik arka planı beyaz */
+    border-top: 3px solid #ccc; /* Üst menü ile ayırıcı çizgi */
+}
+
+/* Sol Taraf: Haber Listesi */
+.news-list {
+    flex: 0 0 60%; /* Genişlik %60 */
+    overflow-y: auto; /* Dikey kaydırma */
+    padding: 15px;
+    background-color: #f8f8f8; /* Hafif gri arka plan */
+    border-right: 1px solid #ccc; /* Sağdaki bölümle ayırıcı */
+    display: grid; /* Grid layout */
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); /* Otomatik sütun */
+    gap: 15px; /* Kutular arası boşluk */
+    align-content: start; /* Öğeleri yukarıdan başlat */
+}
+
+.loading-message {
+    grid-column: 1 / -1; /* Tüm sütunları kapla */
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    color: #666;
+}
+
+/* Haber Kutusu */
+.news-item {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    height: 220px; /* Yüksekliği biraz artırdık */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.news-item:hover {
+    transform: translateY(-3px); /* Hafif yukarı kalkma efekti */
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.12);
+}
+
+.news-image-container {
+    height: 110px; /* Resim alanı yüksekliği */
+    background-color: #eee; /* Resim yüklenene kadar */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.news-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Resmi alana sığdır */
+    border-bottom: 1px solid #eee;
+}
+
+.news-content {
+    flex: 1; /* Kalan alanı kapla */
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    /* Arka plan rengi JS ile eklenecek */
+}
+
+.news-title {
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1.3;
+    flex-grow: 1; /* Mümkün olduğunca alanı doldur */
+    margin-bottom: 5px;
+    /* Metin rengi JS ile ayarlanacak */
+    /* Çok uzun başlıklar için */
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3; /* Maksimum 3 satır */
+    -webkit-box-orient: vertical;
+}
+
+.news-date {
+    font-size: 11px;
+    color: #fff; /* Genellikle beyaz iyi durur */
+    text-align: center;
+    padding: 3px 5px;
+    border-radius: 4px;
+    margin-top: auto; /* En alta yasla */
+    /* Arka plan rengi JS ile eklenecek */
+}
+
+/* Sağ Taraf: Haber Detayları (iframe) */
+.news-detail {
+    flex: 0 0 40%; /* Genişlik %40 */
+    background-color: #e9e9e9; /* Biraz daha koyu gri */
+    overflow: hidden; /* iframe'in taşmasını engelle */
+    position: relative; /* İçerik için */
+}
+
+.news-detail iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block; /* Alt boşluğu kaldır */
+}
+
+/* Kaydırma çubuğu stilleri (isteğe bağlı, daha hoş görünüm için) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
+/* Responsive Tasarım */
+@media (max-width: 992px) {
+    .news-list {
+        flex: 0 0 50%;
+    }
+    .news-detail {
+        flex: 0 0 50%;
+    }
+    .news-item {
+        height: 200px;
+    }
+    .news-image-container {
+        height: 100px;
+    }
+}
+
+
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column; /* Dikey sırala */
+        height: auto; /* Yüksekliği otomatik ayarla */
+    }
+
+    .news-list, .news-detail {
+        flex: 1 1 auto; /* Esnek büyüme/küçülme */
+        width: 100%; /* Tam genişlik */
+        height: calc(50vh - 60px); /* Ekran yüksekliğinin yarısı (başlık payı düşüldü) */
+        max-height: 50vh; /* Maksimum yükseklik */
+    }
+
+    .news-list {
+        border-right: none; /* Ayırıcıyı kaldır */
+        border-bottom: 1px solid #ccc; /* Alt ayırıcı */
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Daha küçük kutular */
+    }
+
+    .header-top {
+        padding: 8px 15px;
+    }
+    .logo {
+        font-size: 28px;
+    }
+    #clock, .language {
+        font-size: 14px;
+    }
+    .category-menu {
+        padding: 6px 15px;
+    }
+    .category-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .news-list {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Daha da küçük kutular */
+        gap: 10px;
+        padding: 10px;
+    }
+    .news-item {
+        height: 180px;
+    }
+    .news-image-container {
+        height: 90px;
+    }
+    .news-title {
+        font-size: 12px;
+    }
+    .news-date {
+        font-size: 10px;
+    }
+}

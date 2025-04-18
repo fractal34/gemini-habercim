@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habercim</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Üst Menü -->
+        <header class="header">
+            <div class="header-top">
+                <h1 class="logo">HABERCİM</h1>
+                <div class="header-right">
+                    <span id="clock">--:--</span>
+                    <span class="language">TR ENG</span>
+                </div>
+            </div>
+            <nav class="category-menu" id="category-menu">
+                <!-- Kategori düğmeleri JavaScript ile buraya eklenecek -->
+            </nav>
+        </header>
+
+        <!-- Ana İçerik -->
+        <main class="main-content">
+            <!-- Sol Taraf: Haber Listesi -->
+            <section class="news-list" id="news-list">
+                <!-- Haber kutuları JavaScript ile buraya eklenecek -->
+                <p class="loading-message">Haberler yükleniyor...</p>
+            </section>
+
+            <!-- Sağ Taraf: Haber Detayları (iframe) -->
+            <aside class="news-detail" id="news-detail">
+                <iframe id="news-iframe" name="news-iframe" frameborder="0" style="width:100%; height:100%; background-color: #fff;">
+                    <!-- Başlangıçta boş veya bir hoşgeldin mesajı gösterilebilir -->
+                </iframe>
+            </aside>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
