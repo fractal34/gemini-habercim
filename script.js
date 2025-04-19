@@ -119,7 +119,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const news = [];
             items.forEach(item => {
                 const title = item.querySelector("title")?.textContent || 'Başlık Yok';
-                const link = item.querySelector("link")?.textContent || '#';
+
+                // --- Geliştirilmiş Link Çekme Mantığı ---
+                let link = item.querySelector("link")?.textContent?.trim(); // Önce <link> etiketini dene ve boşlukları temizle
+
+                // Eğer <link> boş veya bulunamadıysa, <guid> etiketini kontrol et
+                if (!link || link === '#') {
+                    const guidElement = item.querySelector("guid");
+                    if (guidElement) {
+                        const guidText = guidElement.textContent?.trim();
+                        const isPermaLink = guidElement.getAttribute("isPermaLink");
+                        // Eğer guid isPermaLink="true" ise veya false değilse VE http ile başlıyorsa, onu link olarak kullan
+                        if (guidText && (isPermaLink === "true" || (isPermaLink !== "false" && guidText.startsWith('http')))) {
+                            link = guidText;
+                            console.log(`Used guid as link: ${link}`); // Debug için log
+                        }
+                    }
+                }
+
+                // Hala geçerli bir link bulunamadıysa '#' ata
+                link = (link && link.startsWith('http')) ? link : '#';
+                // --- Bitiş: Geliştirilmiş Link Çekme Mantığı ---
+
                 const pubDateStr = item.querySelector("pubDate")?.textContent;
                 const description = item.querySelector("description")?.textContent || '';
                 // Resmi description içinden veya enclosure'dan almaya çalışalım
