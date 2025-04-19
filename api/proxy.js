@@ -1,75 +1,116 @@
-// node-fetch'i Vercel ortamında kullanmak için import ediyoruz
-// Vercel genellikle kendi fetch implementasyonunu sağlar ama node-fetch daha tutarlı olabilir.
-// Eğer Vercel'in yerleşik fetch'i yeterliyse bu satır kaldırılabilir ve package.json'dan da silinebilir.
-// Şimdilik node-fetch ile devam edelim.
+// api/proxy.js
+
 const fetch = require('node-fetch');
+const { URL } = require('url'); // URL işlemek için
+
+// Kaldırılacak veya değiştirilecek başlıklar (küçük harfle)
+const BLOCKED_HEADERS = [
+    'content-security-policy',
+    'x-frame-options',
+    // 'strict-transport-security', // HSTS'yi kaldırmak genellikle iyi bir fikir değildir
+    'content-encoding', // Sıkıştırmayı proxy'nin tekrar yapması gerekebilir, şimdilik kaldıralım
+    'transfer-encoding' // Chunked gibi kodlamalar sorun çıkarabilir
+];
 
 module.exports = async (req, res) => {
-    // CORS Ayarları - Sadece belirli bir domainden gelen isteklere izin ver
-    // Firebase projenizin URL'sini buraya yazın (Örn: https://habercim-yeni.web.app)
-    // Şimdilik '*' kullanarak tüm domainlere izin verelim, dağıtımdan önce güncellenmeli!
-    // VEYA daha güvenlisi, Vercel proje ayarlarından izin verilen domainleri yönetmek.
-    res.setHeader('Access-Control-Allow-Origin', '*'); // DİKKAT: Dağıtımdan önce kısıtlayın!
+    // CORS Ayarları (Geliştirme için *, dağıtımda kısıtla!)
+    // ÖNEMLİ: Dağıtımdan önce Firebase URL'niz ile değiştirin!
+    // Örn: res.setHeader('Access-Control-Allow-Origin', 'https://habercim-yeni.web.app');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Tarayıcıların CORS öncesi gönderdiği OPTIONS isteğini handle et
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
-    // İstekten 'url' parametresini al
-    const { url } = req.query;
+    const targetUrl = req.query.url;
 
-    // URL parametresi yoksa hata döndür
-    if (!url) {
-        res.status(400).json({ error: 'URL parametresi eksik.' });
-        return; // Fonksiyonun devam etmesini engelle
+    if (!targetUrl) {
+        return res.status(400).json({ error: 'URL parametresi eksik.' });
     }
 
-    // URL'nin geçerli bir HTTP/HTTPS URL olup olmadığını kontrol et (basit kontrol)
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        res.status(400).json({ error: 'Geçersiz URL formatı.' });
-        return;
+    let decodedUrl;
+    try {
+        decodedUrl = decodeURIComponent(targetUrl);
+        // URL geçerliliğini kontrol et
+        new URL(decodedUrl);
+    } catch (error) {
+        return res.status(400).json({ error: 'Geçersiz URL formatı.' });
     }
 
     try {
-        // Belirtilen URL'den RSS beslemesini fetch ile çek
-        const response = await fetch(decodeURIComponent(url), { // URL decode edilebilir
+        console.log(`Proxying request for: ${decodedUrl}`); // Loglama
+        const targetResponse = await fetch(decodedUrl, {
             headers: {
-                // Bazı RSS sağlayıcıları User-Agent isteyebilir
                 'User-Agent': 'Habercim RSS Reader (Vercel Proxy)',
-                'Accept': 'application/rss+xml, application/xml, text/xml', // Kabul edilen tipler
+                'Accept': req.headers.accept || '*/*', // İstemcinin accept başlığını ilet
+                // Diğer gerekli başlıkları da iletebiliriz (örn: Accept-Language)
             },
-            // Zaman aşımı ekleyebiliriz (örneğin 10 saniye)
-            timeout: 10000,
+            redirect: 'follow', // Yönlendirmeleri takip et
+            timeout: 15000, // Zaman aşımını biraz artıralım (15 saniye)
         });
 
-        // Yanıt başarılı değilse (2xx dışında bir status kodu varsa) hata fırlat
-        if (!response.ok) {
-            // Daha detaylı hata mesajı
-            const errorText = await response.text().catch(() => 'Detay alınamadı');
-            console.error(`Proxy Hata: ${response.status} ${response.statusText} - URL: ${url} - Detay: ${errorText}`);
-            throw new Error(`Kaynak sunucu hatası: ${response.status} ${response.statusText}`);
+        if (!targetResponse.ok) {
+            const errorText = await targetResponse.text().catch(() => 'Detay alınamadı');
+            console.error(`Proxy Hata: ${targetResponse.status} ${targetResponse.statusText} - URL: ${decodedUrl} - Detay: ${errorText}`);
+            // Hata durumunda istemciye daha anlamlı bir yanıt dönelim
+            return res.status(targetResponse.status).json({
+                error: `Kaynak sunucu hatası: ${targetResponse.status} ${targetResponse.statusText}`,
+                details: errorText.substring(0, 500) // Çok uzun olmasın
+            });
         }
 
-        // Yanıt içeriğini text olarak al
-        const feedText = await response.text();
+        // Yanıt içeriğini buffer olarak alalım (binary veriler için daha iyi)
+        const bodyBuffer = await targetResponse.buffer();
 
-        // Yanıtın Content-Type başlığını orijinal kaynaktan almaya çalışalım, yoksa XML varsayalım
-        const contentType = response.headers.get('content-type') || 'application/xml; charset=utf-8';
+        // Orijinal başlıklardan filtrelenmiş yeni başlıklar oluştur
+        const responseHeaders = {};
+        targetResponse.headers.forEach((value, name) => {
+            const lowerCaseName = name.toLowerCase();
+            if (!BLOCKED_HEADERS.includes(lowerCaseName)) {
+                // 'set-cookie' başlığı birden fazla olabilir, dizi olarak sakla
+                if (lowerCaseName === 'set-cookie') {
+                    if (!responseHeaders[name]) {
+                        responseHeaders[name] = [];
+                    }
+                    responseHeaders[name].push(value);
+                } else {
+                    responseHeaders[name] = value;
+                }
+            } else {
+                console.log(`Removing blocked header: ${name}`); // Loglama
+            }
+        });
 
-        // Başarılı yanıtı istemciye gönder
+        // Content-Type başlığını mutlaka ayarlayalım
+        const contentType = targetResponse.headers.get('content-type') || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
-        // Cache kontrolü ekleyebiliriz (örneğin 5 dakika)
-        res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate');
-        res.status(200).send(feedText);
+
+        // Diğer filtrelenmiş başlıkları ayarla
+        for (const name in responseHeaders) {
+            // 'set-cookie' başlıklarını ayrı ayrı ayarla
+            if (name.toLowerCase() === 'set-cookie') {
+                 // Vercel'de set-cookie başlığını doğrudan ayarlamak yerine dizi olarak göndermek gerekebilir
+                 // Ancak genellikle tek tek setHeader ile çalışır. Sorun olursa burayı kontrol et.
+                responseHeaders[name].forEach(cookie => {
+                    res.setHeader('Set-Cookie', cookie);
+                });
+            } else {
+                res.setHeader(name, responseHeaders[name]);
+            }
+        }
+
+        // Cache kontrolü (kısa süreli)
+        res.setHeader('Cache-Control', 'public, max-age=60'); // 1 dakika cache
+
+        // Yanıtı gönder
+        res.status(targetResponse.status).send(bodyBuffer);
 
     } catch (error) {
-        // Hata oluşursa logla ve istemciye 500 hatası gönder
-        console.error(`Proxy Yakalama Hatası - URL: ${url}`, error);
+        console.error(`Proxy Yakalama Hatası - URL: ${decodedUrl}`, error);
         res.status(500).json({
-            error: 'RSS beslemesi alınırken bir hata oluştu.',
+            error: 'Proxy sunucusunda bir hata oluştu.',
             details: error.message
         });
     }

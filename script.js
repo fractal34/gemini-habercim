@@ -249,8 +249,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Tıklama Olayı
             newsItemElement.addEventListener('click', () => {
+                const newsUrl = item.link;
+                console.log(`Clicked news item. URL: ${newsUrl}`); // Debug
+
                 // iframe'in src'sini güncelle
-                newsDetailFrame.src = item.link;
+                // Milliyet linkleri için proxy kullan, diğerleri için doğrudan link
+                if (newsUrl && newsUrl.startsWith('https://www.milliyet.com.tr')) {
+                    const proxyUrl = `/api/proxy?url=${encodeURIComponent(newsUrl)}`;
+                    console.log(`Using proxy for Milliyet: ${proxyUrl}`); // Debug
+                    newsDetailFrame.src = proxyUrl;
+                } else if (newsUrl) {
+                    console.log(`Using direct link for: ${newsUrl}`); // Debug
+                    newsDetailFrame.src = newsUrl;
+                } else {
+                    console.log("No valid URL found for this item.");
+                    newsDetailFrame.src = 'about:blank'; // Geçerli URL yoksa boş sayfa
+                }
+
                 // İsteğe bağlı: Tıklanan öğeyi vurgula
                 document.querySelectorAll('.news-item.selected').forEach(el => el.classList.remove('selected'));
                 newsItemElement.classList.add('selected');
