@@ -1,21 +1,20 @@
-// api/proxy.js
+// api/proxy.js (Daha detaylı loglama ile)
 
 const fetch = require('node-fetch');
-const { URL } = require('url'); // URL işlemek için
+const { URL } = require('url');
 
 // Kaldırılacak veya değiştirilecek başlıklar (küçük harfle)
 const BLOCKED_HEADERS = [
     'content-security-policy',
     'x-frame-options',
-    // 'strict-transport-security', // HSTS'yi kaldırmak genellikle iyi bir fikir değildir
-    'content-encoding', // Sıkıştırmayı proxy'nin tekrar yapması gerekebilir, şimdilik kaldıralım
-    'transfer-encoding' // Chunked gibi kodlamalar sorun çıkarabilir
+    // 'strict-transport-security',
+    'content-encoding',
+    'transfer-encoding'
 ];
 
 module.exports = async (req, res) => {
     // CORS Ayarları (Geliştirme için *, dağıtımda kısıtla!)
     // ÖNEMLİ: Dağıtımdan önce Firebase URL'niz ile değiştirin!
-    // Örn: res.setHeader('Access-Control-Allow-Origin', 'https://habercim-yeni.web.app');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,82 +32,79 @@ module.exports = async (req, res) => {
     let decodedUrl;
     try {
         decodedUrl = decodeURIComponent(targetUrl);
-        // URL geçerliliğini kontrol et
         new URL(decodedUrl);
     } catch (error) {
         return res.status(400).json({ error: 'Geçersiz URL formatı.' });
     }
 
+    console.log(`[PROXY START] Requesting: ${decodedUrl}`); // Loglama: Başlangıç
+
     try {
-        console.log(`Proxying request for: ${decodedUrl}`); // Loglama
         const targetResponse = await fetch(decodedUrl, {
             headers: {
                 'User-Agent': 'Habercim RSS Reader (Vercel Proxy)',
-                'Accept': req.headers.accept || '*/*', // İstemcinin accept başlığını ilet
-                // Diğer gerekli başlıkları da iletebiliriz (örn: Accept-Language)
+                'Accept': req.headers.accept || '*/*',
             },
-            redirect: 'follow', // Yönlendirmeleri takip et
-            timeout: 15000, // Zaman aşımını biraz artıralım (15 saniye)
+            redirect: 'follow', // Yönlendirmeleri takip etmeye devam edelim
+            timeout: 15000,
+        });
+
+        console.log(`[PROXY FETCHED] Status: ${targetResponse.status} for ${decodedUrl}`); // Loglama: Hedef Durum Kodu
+
+        // Loglama: Hedef Sunucudan Alınan Tüm Başlıklar
+        console.log('[PROXY TARGET HEADERS RECEIVED]');
+        const receivedHeaders = {};
+         targetResponse.headers.forEach((value, name) => {
+            console.log(`  ${name}: ${value}`);
+            receivedHeaders[name.toLowerCase()] = value; // Kolay kontrol için küçük harfle sakla
         });
 
         if (!targetResponse.ok) {
             const errorText = await targetResponse.text().catch(() => 'Detay alınamadı');
-            console.error(`Proxy Hata: ${targetResponse.status} ${targetResponse.statusText} - URL: ${decodedUrl} - Detay: ${errorText}`);
-            // Hata durumunda istemciye daha anlamlı bir yanıt dönelim
+            console.error(`[PROXY ERROR] Non-OK status: ${targetResponse.status} ${targetResponse.statusText} - URL: ${decodedUrl} - Body: ${errorText.substring(0, 200)}`);
             return res.status(targetResponse.status).json({
                 error: `Kaynak sunucu hatası: ${targetResponse.status} ${targetResponse.statusText}`,
-                details: errorText.substring(0, 500) // Çok uzun olmasın
+                details: errorText.substring(0, 500)
             });
         }
 
-        // Yanıt içeriğini buffer olarak alalım (binary veriler için daha iyi)
         const bodyBuffer = await targetResponse.buffer();
 
-        // Orijinal başlıklardan filtrelenmiş yeni başlıklar oluştur
-        const responseHeaders = {};
+        // Başlıkları Filtrele ve İstemciye Gönderilecekleri Hazırla
+        console.log('[PROXY FILTERING/SENDING HEADERS]');
+        let finalContentType = receivedHeaders['content-type'] || 'application/octet-stream';
+        res.setHeader('Content-Type', finalContentType);
+        console.log(`  SENT -> Content-Type: ${finalContentType}`);
+
         targetResponse.headers.forEach((value, name) => {
             const lowerCaseName = name.toLowerCase();
-            if (!BLOCKED_HEADERS.includes(lowerCaseName)) {
-                // 'set-cookie' başlığı birden fazla olabilir, dizi olarak sakla
+            // Content-Type'ı tekrar ayarlama ve engellenenleri atla
+            if (lowerCaseName !== 'content-type' && !BLOCKED_HEADERS.includes(lowerCaseName)) {
+                // Set-Cookie özel durumu
                 if (lowerCaseName === 'set-cookie') {
-                    if (!responseHeaders[name]) {
-                        responseHeaders[name] = [];
-                    }
-                    responseHeaders[name].push(value);
+                    // Vercel genellikle tek setHeader ile birden fazla cookie'yi handle edemez,
+                    // bu yüzden gelen her cookie için ayrı setHeader çağrısı yapmalıyız.
+                    // Ancak node-fetch'in headers objesi bunu birleştirebilir. Tekrar deneyelim.
+                    // Eğer cookie'ler çalışmazsa, burayı `res.appendHeader` veya benzeri bir yöntemle değiştirmek gerekebilir.
+                     res.setHeader(name, value); // Tekrar deneyelim
+                     console.log(`  SENT -> ${name}: ${value.substring(0,50)}...`);
                 } else {
-                    responseHeaders[name] = value;
+                    res.setHeader(name, value);
+                    console.log(`  SENT -> ${name}: ${value}`);
                 }
-            } else {
-                console.log(`Removing blocked header: ${name}`); // Loglama
+            } else if (BLOCKED_HEADERS.includes(lowerCaseName)) {
+                 console.log(`  REMOVED -> ${name}: ${value}`);
             }
         });
 
-        // Content-Type başlığını mutlaka ayarlayalım
-        const contentType = targetResponse.headers.get('content-type') || 'application/octet-stream';
-        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        console.log('  SENT -> Cache-Control: public, max-age=60');
 
-        // Diğer filtrelenmiş başlıkları ayarla
-        for (const name in responseHeaders) {
-            // 'set-cookie' başlıklarını ayrı ayrı ayarla
-            if (name.toLowerCase() === 'set-cookie') {
-                 // Vercel'de set-cookie başlığını doğrudan ayarlamak yerine dizi olarak göndermek gerekebilir
-                 // Ancak genellikle tek tek setHeader ile çalışır. Sorun olursa burayı kontrol et.
-                responseHeaders[name].forEach(cookie => {
-                    res.setHeader('Set-Cookie', cookie);
-                });
-            } else {
-                res.setHeader(name, responseHeaders[name]);
-            }
-        }
-
-        // Cache kontrolü (kısa süreli)
-        res.setHeader('Cache-Control', 'public, max-age=60'); // 1 dakika cache
-
-        // Yanıtı gönder
+        console.log(`[PROXY SUCCESS] Sending ${bodyBuffer.length} bytes for ${decodedUrl}`);
         res.status(targetResponse.status).send(bodyBuffer);
 
     } catch (error) {
-        console.error(`Proxy Yakalama Hatası - URL: ${decodedUrl}`, error);
+        console.error(`[PROXY CRITICAL ERROR] URL: ${decodedUrl}`, error);
         res.status(500).json({
             error: 'Proxy sunucusunda bir hata oluştu.',
             details: error.message
